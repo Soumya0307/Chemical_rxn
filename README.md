@@ -1,11 +1,32 @@
 # Chemical_rxn
 
-Each folder corresponds to different reactions.
+This repository contains folders for different chemical reactions. Each folder includes the required input files and geometries for generating a sequence of structures between the reactant and transition state (TS).
 
-Each reaction contains the import input file and reactant/TS geometries to get the sequence of geometries between those two
+## Folder Contents
 
-*_MEP_trj.xyz - 1. Use this file for each reaction to see the animation or could be used to resume the reaction forward
-                2. This files includes all the sequence of geometries to use as input for our dissipative algorithm.
+Each reaction folder contains: 
 
-*.interp - Use this as input of <code>ORCA-NEB.ipynb</code> for plotting the MEP. Remember to put the *.interp and the *.ipynb file inside same directory
+### `*_MEP_trj.xyz` (Most important for further resource estimation)
 
+This file contains the minimum energy path (MEP) trajectory.
+
+It can be used for:
+
+1. Visualizing the reaction animation.
+2. Resuming the reaction in the forward direction.
+3. Providing the full sequence of geometries as input for the dissipative algorithm.
+
+### `*.interp` 
+
+This file is used as input for `ORCA-NEB.ipynb` to plot the MEP.
+
+To use it:
+
+1. Place the `*.interp` file and `ORCA-NEB.ipynb` in the same directory.
+2. Run the notebook to generate the MEP plot.
+
+## Notes
+
+- Each folder corresponds to a separate reaction.
+- Reactant and TS geometries are provided to construct the reaction pathway.
+- The `*_MEP_trj.xyz` file includes all intermediate geometries along the path.
