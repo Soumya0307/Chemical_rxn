@@ -1,0 +1,47 @@
+1. Pauli decomposition sent to Rakshit
+2. Read the paper sent by Sam 
+3. Make slides
+4. Mail Marika
+#5. Mail FCM for quotes -- at least do until this
+6. Fake hotel booking
+7. Apply for visa
+
+Sign from supervisor
+
+8. Fill form for HDR budget
+9. Travel request form
+
+
+
+\paragraph*{Application:}
+We consider quantum simulation of chemically relevant systems, with a focus on catalytic processes and lithium-ion battery chemistry. The central objective is the estimation of ground-state energies and reaction pathways across a sequence of molecular configurations, particularly in regimes involving strong electronic correlations and complex transition states. These problems are naturally structured along reaction coordinates, where the Hamiltonian evolves smoothly as a function of molecular geometry.
+
+In this setting, we employ dissipative evolution methods for ground-state preparation~\cite{watts2026}, which are well-suited to tracking ground states across such structured sequences of Hamiltonians. Rather than requiring deep coherent circuits and high-quality initial states, dissipative evolution iteratively contracts population into the instantaneous low-energy subspace, allowing approximate ground states to be transported along the reaction pathway. This approach is particularly advantageous in chemically relevant regimes, where classical methods and traditional quantum algorithms struggle due to small spectral gaps and highly entangled intermediate states.
+
+A key feature of this formulation is that it shifts the computational task from single-instance ground-state preparation to the controlled propagation of ground states across reaction pathways. This aligns naturally with practical chemistry workflows, where the goal is not only to compute energies at isolated geometries, but to resolve relative energy differences and activation barriers that determine reaction rates.
+
+\paragraph*{Metrics:}
+The primary metrics are determined by both system size and pathway structure. At the instance level, we track physical operation count and logical qubit requirements as functions of the number of orbitals and basis functions. Precision requirements are particularly important, as chemically meaningful predictions require energy errors below the scale of chemical accuracy. 
+
+At the pathway level, additional metrics arise from the number of discretization steps required to resolve the reaction coordinate and maintain overlap with the ground state. This introduces a dependence on the smoothness of the Hamiltonian along the pathway, as well as the robustness of the dissipative evolution procedure to accumulated errors. Space-time volume again provides a unified measure of total computational effort across the full reaction pathway.
+
+\paragraph*{Utility Threshold:}
+Utility is defined relative to the limitations of classical computational chemistry methods. In particular, quantum advantage is achieved when simulations can accurately resolve reaction pathways involving strongly correlated transition states that are inaccessible to methods such as coupled-cluster theory. A critical threshold is the ability to achieve chemically accurate energy differences across the full reaction coordinate, enabling reliable prediction of activation barriers and reaction rates.
+
+An additional threshold arises from the structured nature of the problem: the ability to efficiently propagate ground states across multiple configurations without reinitializing from scratch. Achieving this capability would represent a significant improvement over both classical workflows and quantum approaches that treat each geometry independently.
+
+\paragraph*{Testing Procedures and Benchmarks:}
+Benchmark instances are defined in terms of catalytic reaction pathways and lithium-ion battery chemistries, including representative transition metal complexes and electrode materials. Each pathway is discretized into a sequence of molecular geometries, with corresponding Hamiltonians constructed for each configuration.
+
+For each instance, circuits implementing dissipative evolution steps are to be generated using pyLIQTR (or similar) and compiled into fault-tolerant resource estimates via Rottnest. Resource requirements are evaluated both per geometry and across the full reaction pathway, allowing assessment of cumulative cost and scaling behaviour. Analytical estimates of scaling with system size and pathway length are cross-validated against compiled results, with particular attention to the robustness of ground-state propagation and the impact of precision requirements on total cost.
+
+
+
+
+# Write two pages of thesis
+# Analysis on choosing a path
+# Number of W ops 
+# Making the table
+# Read another symm method (Nam)
+# Surface chemistry (Nam)
+# Check Thomas' code

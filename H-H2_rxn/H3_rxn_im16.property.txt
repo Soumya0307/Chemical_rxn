@@ -1,0 +1,95 @@
+*************************************************
+******************* ORCA 6.1.1 ******************
+*************************************************
+$Geometry
+   &GeometryIndex 1
+   &NAtoms [&Type "Integer"] 3
+   &NCorelessECP [&Type "Integer"] 0
+   &NGhostAtoms [&Type "Integer"] 0
+   &CartesianCoordinates [&Type "Coordinates", &Dim(3,4), &Units "Bohr"] 
+              H     -4.875493425517    0.000000000000    0.000000000000
+              H      1.738548043208    0.000000000000    0.000000000000
+              H      3.136945382309    0.000000000000    0.000000000000
+$End
+$Calculation_Status
+   &GeometryIndex 1
+   &version [&Type "String"] "6.1.1"
+   &progName [&Type "String"] "LeanSCF"
+   &Status [&Type "String"] "NORMAL TERMINATION"
+$End
+$SCF_Energy
+   &GeometryIndex 1
+   &Method [&Type "String"] "SCF"
+   &totalEnergy [&Type "ArrayOfDoubles", &Dim (1,1)] "Total energy of each state"
+                                                         0
+
+0                                     -1.6647457224208742e+00
+   &Mult [&Type "ArrayOfIntegers", &Dim (1,1)] "Multiplicity of each state"
+                                                         0
+
+0                                                        2
+$End
+$DFT_Energy
+   &GeometryIndex 1
+   &nAlphaEl [&Type "Integer"] 2
+   &nBetaEl [&Type "Integer"] 1
+   &nTotalEl [&Type "Integer"] 3
+   &finalEn [&Type "Double"]      -1.6647457224208742e+00  "No Van der Waals correction"
+   &eExchange [&Type "Double"]      -7.5983924181546736e-01
+   &eCorr [&Type "Double"]      -5.3370813823776987e-02
+   &eXC [&Type "Double"]      -8.1321005563924431e-01
+   &eCNL [&Type "Double"]       0.0000000000000000e+00
+$End
+$SCF_Timings
+   &GeometryIndex 1
+   &TOTAL [&Type "Double"]       5.6429999999999998e+00
+   &PREP [&Type "Double"]       1.5100000000000000e-01
+   &FOCK [&Type "Double"]       2.4019999999999997e+00
+   &DENS [&Type "Double"]       7.0299999999999940e-01
+   &ETOT [&Type "Double"]       3.0800000000000044e-01
+   &POP [&Type "Double"]       8.0000000000000071e-03
+   &TRAFO [&Type "Double"]       1.5199999999999947e-01
+   &DIIS [&Type "Double"]       9.3100000000000060e-01
+   &SOSCF [&Type "Double"]       4.5499999999999963e-01
+   &XC [&Type "Double"]       5.3099999999999947e-01
+   &FOCKSTART [&Type "Double"]       1.0499999999999962e-01
+   &INT_BF [&Type "Double"]       6.7000000000000670e-02
+   &INT_DENS [&Type "Double"]       4.1000000000001480e-02
+   &INT_DENSIO [&Type "Double"]       4.2124039999999995e+03
+   &INT_FUNC [&Type "Double"]       8.4999999999998299e-02
+   &INT_POT [&Type "Double"]       2.2000000000000797e-02
+   &INT_POTIO [&Type "Double"]       9.5999999999998642e-02
+   &SPLITRIJ [&Type "Double"]       2.5600000000000067e-01
+   &COSX [&Type "Double"]       4.8300000000000015e-01
+$End
+$VdW_Correction
+   &GeometryIndex 1
+   &vdW [&Type "Double"]      -1.9156895798706392e-04
+$End
+$Single_Point_Data
+   &GeometryIndex 1
+   &FinalEnergy [&Type "Double"]      -1.6649372913788612e+00  "Final single point energy"
+   &Converged [&Type "Boolean"] true
+$End
+$SCF_Nuc_Gradient
+   &GeometryIndex 1
+   &NAtoms [&Type "Integer"] 3
+   &gradNorm [&Type "Double"]       2.1810956522128354e-02
+   &grad [&Type "ArrayOfDoubles", &Dim (9,1)] 
+                                                         0
+
+0                                     -7.6793220384957620e-05
+1                                     -1.3434788243518211e-08
+2                                     -8.1837139858409349e-09
+3                                      1.5460928480991879e-02
+4                                      1.3766672909102292e-08
+5                                      8.4529386861119204e-10
+6                                     -1.5384135260606585e-02
+7                                     -3.3188449110675405e-10
+8                                      7.3384201183531195e-09
+   &Method [&Type "String"] "SCF"
+   &Level [&Type "String"] "Relaxed density"
+   &Mult [&Type "Integer"] 2
+   &State [&Type "Integer"] 0
+   &Irrep [&Type "Integer"] 0
+$End

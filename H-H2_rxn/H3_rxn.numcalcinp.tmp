@@ -1,0 +1,7 @@
+H3_rxn        # BaseName
+H3_rxn        # GBWName
+15       # number of calculations
+1       # number of CPUs        
+6       # program flag
+0       # printing flag
+0       # free_end
