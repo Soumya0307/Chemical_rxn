@@ -2,6 +2,9 @@
 
 This repository contains folders for different chemical reactions. Each folder includes the required input files and geometries for generating a sequence of structures between the reactant and transition state (TS).
 
+ - `LinLin_channel.ipynb`: Themain ipynb file that generates the circuit and plots for different parameters for single geometry bHamiltonian
+ - `The_entire_rxn.ipynb`: Runs the above file and plot for list of geometries generated from ORCA runs (`*trj.xyz`)
+ 
 ## Folder Contents
 
 Each reaction folder contains: 
