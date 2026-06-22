@@ -4,6 +4,7 @@ This repository contains folders for different chemical reactions. Each folder i
 
  - `LinLin_channel.ipynb`: Themain ipynb file that generates the circuit and plots for different parameters for single geometry bHamiltonian
  - `The_entire_rxn.ipynb`: Runs the above file and plot for list of geometries generated from ORCA runs (`*trj.xyz`)
+ - `Pauli_Ham_Qubitized_QPE.ipynb`: For benchmarking the resources
  
 ## Folder Contents
 
