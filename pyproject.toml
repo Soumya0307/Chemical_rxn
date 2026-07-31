@@ -30,4 +30,5 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dissipative_algorithms"]
+shared_data = ["src/dissipative_algorithms/reaction_data"]
 
