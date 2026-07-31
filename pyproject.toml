@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dissipative_algorithms"
+version = "0.0.1"
+description = ""
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "matplotlib",
+    "cirq",
+    "openfermion",
+    "scipy",
+    "pyscf",
+    "openfermionpyscf",
+]
+
+[project.optional-dependencies]
+# Plotting is only needed for band-structure validation and the cluster-expansion
+# science plots (`ce fit --plot`, `ce hull -o`). The core fit/predict path does
+# not import matplotlib.
+plot = [
+    "matplotlib>=3.5",
+]
+dev = [
+    "pytest",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dissipative_algorithms"]
+
