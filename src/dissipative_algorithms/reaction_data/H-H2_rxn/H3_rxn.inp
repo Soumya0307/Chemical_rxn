@@ -1,8 +1,0 @@
-! B3LYP def2-SVP D4 NEB-TS TightSCF
-
-%NEB
-  NImages 15
-  NEB_END_XYZFILE "H2_H_p.xyz"
-end
-
-* xyzfile 0 2 H_H2_r.xyz
