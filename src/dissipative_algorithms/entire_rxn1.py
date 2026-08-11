@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse
-import ast
 import csv
+import inspect
 import json
 import os
 import pickle
-import runpy
 import sys
 import tempfile
-import time 
+import time
 import traceback
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from glob import glob
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import cirq  
+import cirq
 import one_ham as linlin
 Geometry = List[Tuple[str, Tuple[float, float, float]]]
-
 USER_CONFIG = {
     "xyz_trajectory": None,
     "geometry_start": 0,
@@ -31,11 +29,11 @@ USER_CONFIG = {
     "include_final_geometry": True,
     "basis": "STO-3G",
     "charge": 0,
-    "multiplicity": 2,         
+    "multiplicity": 2,
     "active_indices": None,
     "ancilla_index": 0,
     "n_active_electrons": None,
-    "n_active_orbitals": None,     
+    "n_active_orbitals": None,
     "use_casscf_orbitals": True,
     "fix_spin_ss": None,
     "max_geom_step": None,
@@ -47,20 +45,22 @@ USER_CONFIG = {
     "spin_adapted_jumps": False,
     # Filter and W-chain settings.
     "tau_filter": 1,
-    "filter_K": 500,
+    "filter_K": 800,
     "filter_window": "lanczos",
     "filter_wmax_factor": 2.0,
     "use_global_filter": False,
     "tau_W": 0.1,
-    "N_applications": 400,  
-    "reps_per_W": 200,
+    "N_applications":1000,
+    "N_applications_later": 100,
+    "reps_per_W": 800,
+    "reps_per_W_later": 100,
     "trotter_steps_H": 4,
     "rng_seed": 123,
-    "evolution_mode": "averaged_matrix",  # sampled_circuit or averaged_matrix
+    "evolution_mode": "sampled_circuit",  # sampled_circuit or averaged_matrix
     "energy_stride": 0,
     "save_outputs": "per_geometry",
-    "reference_sector": "N",       
-    "conserve_spin": False,                
+    "reference_sector": "N",
+    "conserve_spin": False,
     "displacement_min_bohr": 9.0,
     "displacement_max_bohr": 12.0,
     "outdir": os.environ.get("TARGET_DIR", "rxn_linlin_outputs"),
@@ -174,7 +174,9 @@ def load_xyz_trajectory(path: Path) -> List[Geometry]:
             natoms = int(line)
         except ValueError as exc:
             raise ValueError(f"Expected atom count at line {i + 1} of {path}, got: {line!r}") from exc
-        if i + 1 + natoms >= len(text) + 1:
+        # A frame occupies lines i .. i+1+natoms, so the last atom line must be a
+        # valid index: i + 1 + natoms <= len(text) - 1, i.e. i + 2 + natoms <= len(text).
+        if i + 2 + natoms > len(text):
             raise ValueError(f"Incomplete XYZ frame starting at line {i + 1} of {path}")
         i += 2  # skip natoms and comment
         geom: Geometry = []
@@ -229,6 +231,32 @@ def cumulative_displacements_bohr(
             displacements_bohr[-1] + step_bohr
         )
     return np.asarray(displacements_bohr, dtype=float)
+def frame_index_filter(
+    n_frames: int,
+    geometry_start: int = 0,
+    geometry_stop: Optional[int] = None,
+    geometry_stride: int = 1,
+    include_final_geometry: bool = True,
+) -> set:
+    """
+    Frame indices allowed by --geometry-start / --geometry-stop / --geometry-stride.
+
+    Previously these four options were parsed but never used, so passing them had
+    no effect. They now act as a pre-filter that is intersected with the
+    displacement window, so the physical arc length is still measured along the
+    FULL trajectory (slicing first would change the reported displacements).
+
+    With the defaults (start=0, stop=None, stride=1) this returns every frame, so
+    selection is byte-for-byte identical to the displacement-window-only behaviour.
+    """
+    start = max(0, int(geometry_start or 0))
+    stop = n_frames if geometry_stop is None else int(geometry_stop)
+    stop = min(max(stop, 0), n_frames)
+    stride = max(1, int(geometry_stride or 1))
+    allowed = set(range(start, stop, stride))
+    if include_final_geometry and stop - 1 >= start:
+        allowed.add(stop - 1)
+    return allowed
 def refine_geometry_path(
     geometries: List[Geometry],
     original_indices: List[int],
@@ -598,7 +626,7 @@ def run_W_chain_circuit_cached(
     energy_stride = int(energy_stride or 0)
     w_norm = np.array(weights, dtype=float)
     w_norm = w_norm / w_norm.sum()
-    channel_cache = {} 
+    channel_cache = {}
     W_ckt_list = []
     run_t0 = time.perf_counter()
     print(
@@ -647,7 +675,7 @@ def run_W_chain_circuit_cached(
             U_full = W_circ.unitary(qubit_order=qubits_all, dtype=np.complex128)
             M0 = np.array(U_full[0:d_sys, 0:d_sys], copy=True)
             M1 = np.array(U_full[d_sys:2 * d_sys, 0:d_sys], copy=True)
-            del U_full 
+            del U_full
             channel_cache[pair_idx] = (W_circ, M0, M1)
             print(
                 f"[W {t + 1}/{N_applications}] unitary + Kraus blocks cached in "
@@ -719,6 +747,14 @@ def run(args: argparse.Namespace) -> None:
     basis_alpha_beta = getattr(linlin, "basis_alpha_beta", None)
     ground_energy_in_subspace = getattr(linlin, "ground_energy_in_subspace", None)
     linlin_path = Path(linlin.__file__).resolve()
+    # Fail fast: check the requested evolution mode is actually available in
+    # one_ham BEFORE spending time on SCF/CASSCF for geometry 0.
+    if args.evolution_mode == "averaged_matrix" and run_W_chain_averaged_matrix is None:
+        raise RuntimeError(
+            f"--evolution-mode averaged_matrix requires run_W_chain_averaged_matrix, "
+            f"which is missing from {linlin_path}. Either update one_ham.py or use "
+            f"--evolution-mode sampled_circuit."
+        )
     xyz_path = resolve_xyz_trajectory(args.xyz_trajectory)
     source = str(xyz_path)
     geometries_all = load_xyz_trajectory(xyz_path)
@@ -727,33 +763,46 @@ def run(args: argparse.Namespace) -> None:
     )
     x_min = float(args.displacement_min_bohr)
     x_max = float(args.displacement_max_bohr)
-
+    # Frame pre-filter from --geometry-start / --geometry-stop / --geometry-stride
+    # / --include-final-geometry. Intersected with the displacement window below.
+    allowed_frames = frame_index_filter(
+        n_frames=len(geometries_all),
+        geometry_start=args.geometry_start,
+        geometry_stop=args.geometry_stop,
+        geometry_stride=args.geometry_stride,
+        include_final_geometry=bool(args.include_final_geometry),
+    )
     selected_indices = [
         i
         for i, x_i in enumerate(displacements_bohr)
-        if x_min < x_i < x_max
+        if x_min < x_i < x_max and i in allowed_frames
     ]
-
     if not selected_indices:
         raise ValueError(
             f"No geometries lie in the displacement range "
-            f"{x_min} < x < {x_max} Bohr."
+            f"{x_min} < x < {x_max} Bohr with the frame filter "
+            f"start={args.geometry_start}, stop={args.geometry_stop}, "
+            f"stride={args.geometry_stride} ({len(allowed_frames)} frames allowed "
+            f"of {len(geometries_all)})."
         )
-
     geometries = [geometries_all[i] for i in selected_indices]
     print(
     f"Selected {len(geometries)} geometries out of "
     f"{len(geometries_all)} total geometries.",
     flush=True,
     )
-
     print(
         f"Selected original geometry indices: {selected_indices}",
         flush=True,
     )
-
     print(
         f"Displacement window: {x_min} < x < {x_max} Bohr",
+        flush=True,
+    )
+    print(
+        f"Frame filter: start={args.geometry_start}, stop={args.geometry_stop}, "
+        f"stride={args.geometry_stride}, include_final={bool(args.include_final_geometry)} "
+        f"-> {len(allowed_frames)} of {len(geometries_all)} frames allowed",
         flush=True,
     )
     max_geom_step = None if args.max_geom_step in (None, "none", "None") else float(args.max_geom_step)
@@ -780,6 +829,11 @@ def run(args: argparse.Namespace) -> None:
     "n_interpolated_frames": n_interpolated,
     "interpolated_flags": interpolated_flags,
     "align_orbitals": bool(args.align_orbitals),
+    "geometry_start": args.geometry_start,
+    "geometry_stop": args.geometry_stop,
+    "geometry_stride": args.geometry_stride,
+    "include_final_geometry": bool(args.include_final_geometry),
+    "n_frames_allowed_by_filter": len(allowed_frames),
     }
     if not geometries:
         raise ValueError("No geometries selected from the trajectory.")
@@ -806,13 +860,13 @@ def run(args: argparse.Namespace) -> None:
     energy_rows: List[Dict[str, Any]] = []
     filter_cache: Optional[Dict[str, Any]] = None
     cumulative_W = 0
-    run_t0 = time.time() 
+    run_t0 = time.time()
     try:
         for h_idx, (original_idx, geometry) in enumerate(zip(selected_indices, geometries)):
-            t_geom = time.time() 
+            t_geom = time.time()
             print(f"\n===== Hamiltonian/geometry {h_idx}/{len(geometries)-1} | original index {original_idx} =====", flush=True)
             print(geometry, flush=True)
-            print(f"[alive] building Hamiltonian for geometry {h_idx} (SCF/CASSCF + JW + dense matrix)...", flush=True) 
+            print(f"[alive] building Hamiltonian for geometry {h_idx} (SCF/CASSCF + JW + dense matrix)...", flush=True)
             Ham = HamiltonianBuilder().build_molecule(
                 geometry=geometry,
                 basis=args.basis,
@@ -828,7 +882,7 @@ def run(args: argparse.Namespace) -> None:
                 fix_spin_ss=None if str(args.fix_spin_ss).lower() in ("none", "") else float(args.fix_spin_ss),
             )
             print(f"[alive] Hamiltonian ready for geometry {h_idx} "
-                  f"({time.time() - t_geom:.1f} s so far this geometry)", flush=True) 
+                  f"({time.time() - t_geom:.1f} s so far this geometry)", flush=True)
             if bool(args.align_orbitals):
                 align_prev = {
                     "mol": Ham.scf_mol,
@@ -884,7 +938,7 @@ def run(args: argparse.Namespace) -> None:
                 filter_data = filter_cache
             else:
                 print(f"[alive] computing square-wave filter for geometry {h_idx} "
-                      f"(full eigvalsh of the {H_mat.shape[0]}-dim Hamiltonian)...", flush=True)  
+                      f"(full eigvalsh of the {H_mat.shape[0]}-dim Hamiltonian)...", flush=True)
                 filter_data = compute_filter_for_hamiltonian(
                     H_mat=H_mat,
                     SquareWaveFilter=SquareWaveFilter,
@@ -937,6 +991,23 @@ def run(args: argparse.Namespace) -> None:
             print(f"Target reference = {target_label}: {target_energy:.12f}", flush=True)
             print(f"Filter: wmax={filter_data['wmax']:.8f}, T_filter={T_filter:.8f}, terms={len(filter_terms)}", flush=True)
             print(f"Generated {len(pairs)} jump pairs from occ_spin_orbs={occ_spin_orbs}; conserve_spin={bool(args.conserve_spin)}", flush=True)
+            # Geometry 0 starts from a bare HF determinant and needs the full filter
+            # and a long chain. Later geometries start from the previous geometry's
+            # cooled rho, already close to the new ground state, so a coarser filter
+            # and a shorter chain usually suffice.
+            if h_idx == 0 or args.reps_per_W_later is None:
+                reps_now = args.reps_per_W
+            else:
+                reps_now = int(args.reps_per_W_later)
+            if h_idx == 0 or args.N_applications_later is None:
+                n_app_now = args.N_applications
+            else:
+                n_app_now = int(args.N_applications_later)
+            n_terms_now = (len(filter_terms) if reps_now is None
+                           else sum(1 for k, _ in filter_terms if abs(k) <= reps_now))
+            print(f"[reps] geometry {h_idx}: reps_per_W = {reps_now} "
+                  f"({n_terms_now} of {len(filter_terms)} filter terms), "
+                  f"N_applications = {n_app_now}", flush=True)
             if args.evolution_mode == "sampled_circuit":
                 steps, energies, W_circuits, rho_current = run_W_chain_circuit_cached(
                     system_qubits=system_qubits,
@@ -946,8 +1017,8 @@ def run(args: argparse.Namespace) -> None:
                     filter_terms=filter_terms,
                     pairs=pairs,
                     weights=weights,
-                    N_applications=args.N_applications,
-                    reps_per_W=args.reps_per_W,
+                    N_applications=n_app_now,
+                    reps_per_W=reps_now,
                     occ_spin_orbs=occ_spin_orbs,
                     trotter_steps_H=args.trotter_steps_H,
                     rng_seed=args.rng_seed + h_idx,
@@ -959,7 +1030,7 @@ def run(args: argparse.Namespace) -> None:
             elif args.evolution_mode == "averaged_matrix":
                 if run_W_chain_averaged_matrix is None:
                     raise RuntimeError("one_ham.py does not provide run_W_chain_averaged_matrix.")
-                steps, energies, W_circuits, rho_current = run_W_chain_averaged_matrix(
+                averaged_kwargs = dict(
                     system_qubits=system_qubits,
                     H_int=interaction_ham,
                     anc=ancilla,
@@ -967,8 +1038,8 @@ def run(args: argparse.Namespace) -> None:
                     filter_terms=filter_terms,
                     pairs=pairs,
                     weights=weights,
-                    N_applications=args.N_applications,
-                    reps_per_W=args.reps_per_W,
+                    N_applications=n_app_now,
+                    reps_per_W=reps_now,
                     occ_spin_orbs=occ_spin_orbs,
                     trotter_steps_H=args.trotter_steps_H,
                     rng_seed=args.rng_seed + h_idx,
@@ -976,6 +1047,19 @@ def run(args: argparse.Namespace) -> None:
                     H_mat_sys=H_mat,
                     initial_rho_sys=rho_in,
                 )
+                # Forward energy_stride only if this one_ham revision accepts it,
+                # so --energy-stride is honoured in averaged mode when supported
+                # instead of being silently ignored.
+                try:
+                    if "energy_stride" in inspect.signature(run_W_chain_averaged_matrix).parameters:
+                        averaged_kwargs["energy_stride"] = int(args.energy_stride)
+                    else:
+                        print("[note] run_W_chain_averaged_matrix has no energy_stride "
+                              "parameter; --energy-stride is ignored in averaged mode.",
+                              flush=True)
+                except (TypeError, ValueError):
+                    pass
+                steps, energies, W_circuits, rho_current = run_W_chain_averaged_matrix(**averaged_kwargs)
             else:
                 raise ValueError("evolution_mode must be sampled_circuit or averaged_matrix.")
             rho_out = np.asarray(rho_current)
@@ -1006,6 +1090,9 @@ def run(args: argparse.Namespace) -> None:
             summary_row = asdict(record)
             summary_row["initial_energy"] = initial_energy
             summary_row["energy_reduction"] = float(initial_energy - final_energy)
+            summary_row["reps_per_W"] = None if reps_now is None else int(reps_now)
+            summary_row["n_filter_terms_used"] = int(n_terms_now)
+            summary_row["N_applications_used"] = int(n_app_now)
             summary_rows.append(summary_row)
             for local_step, energy in zip(steps, energies):
                 energy_rows.append({
@@ -1068,7 +1155,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "the current directory and requires exactly one trajectory-like XYZ file."
         ),
     )
-    p.add_argument("--geometry-start", type=int, default=USER_CONFIG["geometry_start"], help="First trajectory frame index to use, 0-based.")
+    p.add_argument("--geometry-start", type=int, default=USER_CONFIG["geometry_start"], help="First trajectory frame index to use, 0-based. Intersected with the displacement window.")
     p.add_argument("--geometry-stop", type=int, default=USER_CONFIG["geometry_stop"], help="Exclusive stop frame index. Default: end of trajectory.")
     p.add_argument("--geometry-stride", type=int, default=USER_CONFIG["geometry_stride"], help="Use every stride-th frame from the trajectory.")
     p.add_argument(
@@ -1098,11 +1185,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--use-global-filter", action=argparse.BooleanOptionalAction, default=USER_CONFIG["use_global_filter"], help="Use first geometry's filter for all geometries. Default recomputes per geometry.")
     p.add_argument("--tau-W", type=float, default=USER_CONFIG["tau_W"], help="tau argument passed to the W chain.")
     p.add_argument("--N-applications", type=int, default=USER_CONFIG["N_applications"])
+    p.add_argument("--N-applications-later", type=int, default=USER_CONFIG["N_applications_later"],
+                   help="N_applications from the SECOND geometry onward. "
+                        "Default: same as --N-applications.")
     p.add_argument("--reps-per-W", type=int, default=USER_CONFIG["reps_per_W"])
+    p.add_argument("--reps-per-W-later", type=int, default=USER_CONFIG["reps_per_W_later"],
+                   help="reps_per_W to use from the SECOND geometry onward. "
+                        "Default: same as --reps-per-W.")
     p.add_argument("--trotter-steps-H", type=int, default=USER_CONFIG["trotter_steps_H"])
     p.add_argument("--rng-seed", type=int, default=USER_CONFIG["rng_seed"])
     p.add_argument("--evolution-mode", choices=["sampled_circuit", "averaged_matrix"], default=USER_CONFIG["evolution_mode"], help="sampled_circuit is one stochastic branch; averaged_matrix is the deterministic Lindblad-average channel.")
-    p.add_argument("--energy-stride", type=int, default=USER_CONFIG["energy_stride"], help="sampled_circuit only: 0 = record energy at endpoints of each geometry only; m > 0 = also record every m steps.")
+    p.add_argument("--energy-stride", type=int, default=USER_CONFIG["energy_stride"], help="0 = record energy at endpoints of each geometry only; m > 0 = also record every m steps. In averaged_matrix mode this is forwarded only if one_ham supports it.")
     p.add_argument("--save-outputs", choices=["per_geometry", "at_end"], default=USER_CONFIG["save_outputs"], help="Write CSVs/pickles/plots after every geometry (crash-safe) or once at the end (faster for sampled_circuit).")
     p.add_argument("--reference-sector", choices=["auto", "N", "NaNb", "Fock", "singlet"], default=USER_CONFIG["reference_sector"], help="Which ground energy to use as the convergence target in plots. 'singlet' = lowest S^2~0 state (use with --spin-adapted-jumps).")
     p.add_argument("--spin-adapted-jumps", action=argparse.BooleanOptionalAction, default=USER_CONFIG["spin_adapted_jumps"], help="Use S^2-conserving singlet excitation jump operators E_pq (alpha+beta strands per kick). Keeps closed-shell dynamics in the singlet subspace.")
@@ -1110,7 +1203,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--conserve-spin", action=argparse.BooleanOptionalAction, default=USER_CONFIG["conserve_spin"], help="Restrict jumps to same spin-orbital parity. Use with --reference-sector NaNb.")
     p.add_argument("--displacement-min-bohr", type=float, default=USER_CONFIG["displacement_min_bohr"])
     p.add_argument("--displacement-max-bohr", type=float, default=USER_CONFIG["displacement_max_bohr"])
-
     p.add_argument("--outdir", default=USER_CONFIG["outdir"], help="Output directory.")
     return p
 if __name__ == "__main__":
