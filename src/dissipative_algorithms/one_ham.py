@@ -43,22 +43,7 @@ from openfermion.chem.molecular_data import spinorb_from_spatial
 # ## The Hamiltonian builder class
 from dataclasses import dataclass
 
-@dataclass
-class HamiltonianData:
-    interaction: object
-    fermion: object
-    qubit: object
-    matrix: np.ndarray
-    energy: float
-    n_system: int
-    ancilla: cirq.LineQubit
-    system_qubits: list
-    geometry: object = None
-    input_pauli: object = None
-    scf_mol: object = None
-    mo_coeff: object = None
-    mo_occ: object = None
-
+from .hamiltonian_data import HamiltonianData
 
 def procrustes_align_mo(mol_prev, C_prev, mo_occ_prev, mol_new, C_new, mo_occ_new):
     """
