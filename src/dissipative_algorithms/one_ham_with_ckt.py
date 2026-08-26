@@ -338,6 +338,10 @@ def build_U_H_trotter(system_qubits, H_int, time_s, trotter_steps_H=1, final_ran
             ),
             strategy=cirq.InsertStrategy.EARLIEST,
         )
+    bad = (cirq.PhasedISwapPowGate, cirq.ISwapPowGate, cirq.PauliStringPhasorGate)
+    circ = cirq.expand_composite(
+        circ, no_decomp=lambda op: not isinstance(op.gate, bad)
+    ) 
     return circ
 
 
