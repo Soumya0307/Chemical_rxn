@@ -1,0 +1,14 @@
+! B3LYP def2-SVP D4 RIJCOSX TightSCF NEB PAL4
+
+%neb
+ NEB_End_XYZFile "TS.xyz"
+ Nimages 20
+end
+
+* xyz 0 3 
+Li   0.0000   0.0000   0.0000
+O    0.6750   1.7653   0.0000
+O   -0.6750   1.7653   0.0000
+O    0.0000  -1.7653   0.6750
+O    0.0000  -1.7653  -0.6750
+*
